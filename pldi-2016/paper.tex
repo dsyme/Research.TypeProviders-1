@@ -427,13 +427,13 @@ The example iterates over a collection of elements \ident{elem} returned by \ide
 The type provides a typed access to elements known from the sample document and so we can
 write \ident{elem.Heading}, which returns an optional value.
 
-\paragraph{Open world and variant types.}
+\paragraph{Open world and annotated \ident{any} types.}
 In the above example, we do not infer a union type representing a choice between 
 heading, paragraph and image. By its nature, XML is extensible and the sample cannot include all 
 possible nodes\footnote{Even when the document structure is defined using XML Schema, documents may 
 contain elements prefixed with other namespaces.}. The type of \ident{elem} is thus a top type (we 
-call it \emph{variant}) annotated with the statically known possibilities (heading, paragraph, image). 
-It is mapped to the following F\# type:
+call it an \emph{any} type) annotated with the statically known possibilities (heading, paragraph, image). 
+It is ultimamtely mapped to the following F\# type:
 %
 \begin{equation*}
 \begin{array}{l}
@@ -444,17 +444,21 @@ It is mapped to the following F\# type:
 \end{array}
 \end{equation*}
 %
-The type provides statically-typed access to elements known statically from the sample, but it encodes
-the \emph{open-world assumption} -- the user also needs to handle the case when the value is none 
-of the statically known elements. 
+This F\# type is worth looking at closely to understand the formalism that follows.  The type
+provides statically-typed access to the possible elements known statically from the sample.
+However the type is not closed -- the data may be some other element about which nothing is known.
+This is the \emph{open-world assumption} -- the user also needs to handle the case when the value is none 
+of the statically known elements.  The F\# type simply records the possibility that the value might be one of
+the given elements.
+%The type is also not exclusive: it doesn't promise that only one of the cases returns a non-\ident{None} value.  
 
-As a consequence, the variant type can be seen as the top type. The above code will work
+As a consequence, each \ident{any} type can be seen as a top type with annotations. The above code will work
 correctly on document that contains any elements, including those not listed in the sample. This
 is highly useful when reading data from external data sources, because the sample document need only
-contain values relevant to the application. In effect, the sample specifies a selective
+contain values relevant to the application. The sample need only specify a selective
 but sufficient characterization of the open-ended possibilities of extensible data. The type 
 inference minimzes the number of variant types that appear in the resulting type --
-a variant is not used if there is an alternative (Corollary~\ref{thm:no-unions}).
+and a variant is not used if there is an alternative (Corollary~\ref{thm:no-unions}).
 
 % -------------------------------------------------------------------------------------------------
 
@@ -549,7 +553,7 @@ is the bottom type.
 
 A variant type \kvd{any} is annotated with the types it may represent in the sample document.
 As discussed earlier (\S\ref{sec:providers-xml}), variants force the user to handle the case when 
-a value is of a different type than the statically known ones and so it can be seen as a family of 
+a value is of a different type than the statically known ones and so variant types can be seen as a family of 
 top types. For the same reason, variants also implicitly permit the \kvd{null} value. 
 
 % --------------------------------------------------------------------------------------------------
@@ -1895,14 +1899,13 @@ in our case, they have to be subtypes of one of the samples.
 
 The type provider mechanism has been described before, but this paper is novel in that it explores concrete
 type providers from the perspective of programming language theory. This is particularly important as the
-F\# Data library is becoming de-facto standard tool for data access in F\#\footnote{At the time of writing, 
-the library has 37,000 downloads on NuGet; over 1600 commits and 36 contributors on GitHub.} and other 
-languages are beginning to adopt mechanisms similar to F\# type providers.
+F\# Data library is becoming de-facto standard tool for data access in F\# and other 
+languages are beginning to adopt mechanisms similar to F\# type providers (CITE Scala Type Macros).
 
 \acks
-?
-We would like to thank to the F\# Data contributors on GitHub and other colleagues working on type providers,
-including Jomo Fisher, Keith Battocchi and Kenji Takeda.
+
+We would like to thank the F\# Data contributors on GitHub and other colleagues contributing to
+type providers and their applications.
 
 \bibliographystyle{abbrvnat}
 \bibliography{paper}

@@ -115,7 +115,7 @@
 %\titlebanner{Unpublished draft, March 2015}        % These are ignored unless
 %\preprintfooter{short description of paper}        % 'preprint' option specified.
 
-\title{F\# Data: \textnormal{Making structured data first-class citizens}}
+\title{Types From Data: \textnormal{Making structured schema-free data formats first-class citizens in F\#}}
 %\subtitle{Subtitle Text, if any}
 
 \authorinfo{Tomas Petricek}
@@ -138,12 +138,12 @@ cumbersome. Should we give up and leave the messy world of external data to dyna
 runtime checks? Of course, not!
 
 We show how to integrate external data sources into the F\# type system. As most real-world data
-do not come with an explicit schema, we develop a type inference algorithm that infers a type from 
+does not come with an explicit schema, we develop a type inference algorithm that infers a type from 
 representative sample documents and integrate it into the F\# type system using type providers.
 
 Our library significantly reduces the amount of code that developers need to write when 
-accessing data. It also provides additional safety guarantees, arguably, as much as possible if 
-we abandon the closed world assumption.
+accessing and producing data. It also provides additional safety guarantees when contrasted 
+with the weakly typed techniques used to anually project data to and from explicit type definitions.
 \end{abstract}
 
 \category{D.3.3}{Programming Languages}{Language Constructs and Features }
@@ -171,8 +171,10 @@ communicate with one or more services over the network and present the aggregate
 Increasing number of such services provide REST-based end-points that return data as CSV, XML
 or JSON. Despite numerous schematization efforts, most services do not come with an 
 explicit schema. At best, the documentation provides sample responses for typical requests.
+These samples seem to be the best, or at least most widespread, way we have collectively found to 
+characterize most information transfer in the world today.
 
-For example, OpenWeatherMap provides an end-point for getting current weather for a 
+For example, openweathermap.org provides an end-point for getting the current weather for a 
 given city\footnote{See ``Current weather data'': \url{http://openweathermap.org/current}}. 
 The documentation describes the URL parameters and shows one sample JSON to illustrate the typical
 response structure. Using a standard library for working with JSON and HTTP, we might call the 
@@ -196,7 +198,8 @@ service and read the temperature as follows:
 The code assumes that the response has a particular format described in the documentation. The
 root node must be a record with a \str{main} field, which has to be another record containing
 a numerical \str{temp} field. When the format is incorrect, the data access simply fails
-with an exception.
+with an exception. The code, while not immediately unsound, is manifestly prone to errors if
+strings are mispelled.
 
 Using the JSON type provider from F\# Data, we can write code with exactly the 
 same functionality in two lines:
@@ -211,8 +214,11 @@ same functionality in two lines:
 $\ident{JsonProvider}\langl\str{...}\rangl$ invokes a type provider at 
 compile-time with the URL as a sample. The type provider infers the structure of the response
 and provides a type with a \ident{GetSample} method that returns a parsed JSON with nested
-properties \ident{Main.Temp}, returning the temperature as a number.
+properties \ident{Main.Temp}, returning the temperature as a number. 
 
+In short, \emph{the types come from the sample data}.  From our experience, 
+this technique is both immensely practical and surprisingly effective in achieving sound 
+information interchange in heterogeneous systems.
 The rest of the paper describes the mechanism and discusses its safety properties. 
 The key novel contributions are:
 
@@ -244,24 +250,25 @@ The key novel contributions are:
 %
 % =================================================================================================
 
-\section{Structural type providers}
+\section{Type providers for structured data formats}
 \label{sec:providers}
 
 We start with an informal overview that shows how F\# Data type providers simplify working with 
 JSON, XML and CSV. We introduce the necessary aspects of F\# type providers along the 
-way. The examples in this section illustrate a number of key properties of our type inference 
+way. The examples in this section illustrate a number of key properties of the type inference 
 algorithm:
 
 \begin{itemize}
-\item Our mechanism is predictable. The user directly works with the inferred types and should 
+\item The mechanism is predictable. The user directly works with the inferred types and should 
   understand why a specific type was inferred from a given sample\footnote{In particular, we do 
   not use probabilistic methods where adding additional sample could change the shape of the type.}.
 
-\item Our inference mechanism prefers records. This supports developer tooling --
-  most F\# editors provide code completion hints on ``.'' and so types with properties (records)
+\item The inference mechanism prefers records. This is to allow partial typings for extensible
+  data formats, and also interacts well with developer tooling --
+  most editors provide code completion hints on ``.'' and so types with properties (records)
   are easier to use than types that require pattern matching.
 
-\item Finally, we handle a number of practical concerns important in the real world. This includes 
+\item Finally, the mechanism handles a number of practical concerns important in the real world. This includes 
   support for different numerical types, \kvd{null} values and missing data.
 \end{itemize}
 
@@ -270,7 +277,7 @@ algorithm:
 \subsection{Working with JSON documents}
 \label{sec:providers-json}
 
-The JSON format used in \S\ref{sec:introduction} is a populardata exchange format based on 
+The JSON format used in \S\ref{sec:introduction} is a popular data exchange format based on 
 JavaScript data structures. The following is the definition of \ident{JsonValue} 
 used earlier to represent JSON:
 %
@@ -298,7 +305,7 @@ aspects of the JSON type provider, we look at an example that also involves an a
 Say we want to print the names with an age if it is available. The standard approach would 
 be to pattern match on the parsed \ident{JsonValue}, check that the top-level node is a \ident{Array}
 and iterate over the elements checking that each is a \ident{Record} with certain properties. We
-would throw an exception or skip values in incorrect format. Even if we defined helper functions, 
+would throw an exception or skip values in an incorrect format. Even if we defined helper functions, 
 we would still need to specify field names as strings, which is error prone and can not be 
 statically checked.
 
@@ -314,16 +321,17 @@ JSON in the same format, we can write:
 \end{array}
 \end{equation*}
 %
-The code achieves the same simplicity as when using dynamically typed languages, but it is statically 
+The code achieves a similar simplicity as when using dynamically typed languages, but is statically 
 type-checked. In contrast to the earlier example, we now use a local file \strf{people.json} as a 
-sample for the type inference, but then processes data from another source. 
+sample for the type inference, but then processes data from another source, which must conform to the
+schema types implied by the sample.
 
 \paragraph{Type providers.}
 The notation $\ident{JsonProvider}\langl\str{people.json}\rangl$ passes a \emph{static parameter} 
 to the type provider. Static parameters are resolved at compile-time and have to be constant. 
 The provider analyzes the sample and generates a type that we name \ident{People}. In most F\# 
 editors, the type provider is also executed at development-time and the provided types are 
-used in auto-completion.
+used in auto-completion and checking.
 
 The \ident{JsonProvider} uses a type inference algorithm (\S\ref{sec:inference})  and
 infers the following types from the sample:
@@ -359,7 +367,7 @@ are subtypes of some of the provided samples (i.e.~the samples are representativ
 no exceptions will occur. In other words, we cannot avoid all failures, but we can prevent some.
 If the OpenWeatherMap changes the response format, the sample in \S\ref{sec:introduction}
 will not re-compile and the user knows that the code needs to be changed. What this means for
-the traditional ML type safety is discussed in \S\ref{sec:safety-discuss}.
+type safety is discussed in \S\ref{sec:safety-discuss}.
 
 \paragraph{The role of records.}
 The sample code is easy to write thanks to the fact that most F\# editors provide code completion
@@ -382,7 +390,7 @@ a field for each attribute and an additional special field for the nested conten
 collection of elements).
 
 Consider a simple extensible document format where a root element
-{\ttfamily\small <doc>} can contain a number of document element, one of which is
+{\ttfamily\small <doc>} can contain a number of document elements, one of which is
 {\ttfamily\small <heading>} representing headings:
 %
 {\small{
@@ -398,7 +406,7 @@ Consider a simple extensible document format where a root element
 }}
 %
 \noindent
-The F\# Data library has been designed primarilly to simplify reading of data. For example,
+The F\# Data library has been designed primarily to simplify reading data. For example,
 say we want to print all headings in the document. The sample shows a part of the document structure 
 (in particular the {\ttfamily\small <heading>} element), but it does not show all possible elements 
 (say, {\ttfamily\small <table>}). Assuming the above document is \strf{sample.doc}, we can write:
@@ -436,16 +444,17 @@ It is mapped to the following F\# type:
 \end{array}
 \end{equation*}
 %
-The type provides a nice access to the elements known statically from the sample, but it encodes
+The type provides statically-typed access to elements known statically from the sample, but it encodes
 the \emph{open-world assumption} -- the user also needs to handle the case when the value is none 
 of the statically known elements. 
 
 As a consequence, the variant type can be seen as the top type. The above code will work
 correctly on document that contains any elements, including those not listed in the sample. This
-is extremely useful when reading data from external data sources, because the sample document only
-needs to contain values relevant to the application. It is also worth noting that our type 
-inference attempts to minimze the number of variant types that appear in the resulting type --
-a variant is not used if there is another option (Corollary~\ref{thm:no-unions}).
+is highly useful when reading data from external data sources, because the sample document need only
+contain values relevant to the application. In effect, the sample specifies a selective
+but sufficient characterization of the open-ended possibilities of extensible data. The type 
+inference minimzes the number of variant types that appear in the resulting type --
+a variant is not used if there is an alternative (Corollary~\ref{thm:no-unions}).
 
 % -------------------------------------------------------------------------------------------------
 
@@ -454,9 +463,9 @@ In addition to JSON and XML (\S\ref{sec:providers-json}, \S\ref{sec:providers-xm
 implements a type provider for CSV. We treat CSV data as lists of records (with field for each 
 column) and so handling of CSV is just a special case of our inference algorithm.
 
-Throughout the introduction, we used data sets that demonstrate typical issues that are frequent
-in real-world inputs (missing data, inconsistent encoding of primitive values and heterogeneous 
-structures). In our experience, these are the most common issues. The following JSON response with 
+Throughout the introduction, we used data sets that demonstrate the typical issues that are frequent
+in real-world inputs: \emph{missing data}, \emph{inconsistent encoding} of primitive values and 
+\emph{heterogeneous structures}. The following JSON response with 
 government debt information returned by the World Bank API\footnote{Available at 
 \url{http://data.worldbank.org}} demonstrates all three problems:
 %
@@ -494,10 +503,10 @@ types of JavaScript.}.
 %
 % =================================================================================================
 
-\section{Structural type inference}
+\section{Type inference for structured data formats}
 \label{sec:inference}
 
-Our type inference algorithm for structured formats is based on a subtyping relation. When 
+The type inference algorithm for structured formats is based on a subtyping relation. When 
 inferring the type, we infer the most specific types of individual values (CSV rows, JSON or XML 
 nodes) and recursively find a common supertype of all child nodes or all sample documents.
 

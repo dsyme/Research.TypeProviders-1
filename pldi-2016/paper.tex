@@ -542,7 +542,7 @@ numbers and \ident{float} for floating-point numbers, are related by sub-typing 
 \S\ref{sec:inference-subtyping}.
 
 Any non-nullable type can be wrapped in the \kvd{option} constructor to explicitly permit the 
-\kvd{null} value. Type providers map \kvd{option} to standard F\# option. A collection $[\sigma]$ 
+\kvd{null} value. Type providers map \kvd{option} to the standard F\# option type. A collection $[\sigma]$ 
 is also nullable and missing values or \kvd{null} are treated as empty collections. The type 
 $\kvd{null}$ is inhabited by the $\kvd{null}$ value (using an overloaded notation) and $\bot$ 
 is the bottom type.
@@ -917,7 +917,7 @@ $\kvd{any}\langl\ident{int}, \kvd{any}\langl\ident{bool}, \ident{decimal}\rangl\
 our algorithm finds the common supertype of $\ident{int}$ and $\ident{decimal}$ and produces 
 $\kvd{any}\langl\ident{decimal},\ident{bool}\rangl$. To identify types that have a common supertype 
 which is not a variant, we group the types by a tag. The tag of a type is obtained using a function 
-\tytagof{(-)}. The function is not defined on $\bot$ and $\kvd{null}$ as those are hanled by the 
+\tytagof{(-)}. The function is not defined on $\bot$ and $\kvd{null}$ as those are handled by the 
 (\emph{bot}) and (\emph{null-1}) or (\emph{null-2}).
 
 The handling of variants is specified using three rules. When combining a non-variant and a

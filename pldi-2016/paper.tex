@@ -458,15 +458,15 @@ In this case, the variant-annotated top type is ultimately presented as the foll
 \end{equation*}
 %
 This still provides access to the possible elements known statically from the sample.
-On the other hand, the user also needs to explicitly handle the casse when the value is none 
+The access is, however, deliberately weak, because the user needs to explicitly handle the casse when the value is none 
 of the statically known elements. 
 For example, the above code for  \strf{sample.doc} includes a \kvd{None -> ()} case to ensure that it will work 
-correctly on a document containing elements not listed in the sample. Similarly, 
-the program is not \emph{forced} to consider each of the possiblities in the annotations (in the manner
-of complete-coverage checks for discriminated unions). For example,
-the program is not forced to cover cases for  \ident{Paragraph} and \ident{Image}.  This is consistent
-with our design principles, which prefer records (with optional properties) over discriminated unions.
-
+correctly on a document containing elements not listed in the sample. Furthermore, 
+the programmer is not \emph{forced} to consider each of the possiblities in the annotations. For example,
+the program is not forced to include cases for  \ident{Paragraph} and \ident{Image}.  
+Both of these weakenings are consistent with our design principles, 
+which prefer records (with optional properties) over discriminated unions, in order to support 
+open-world data and dot-driven developer tooling.
 
 % Nothing forces the programmer to consider the cases
 

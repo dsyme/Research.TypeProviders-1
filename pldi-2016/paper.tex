@@ -263,10 +263,10 @@ algorithm:
   understand why a specific type was inferred from a given sample\footnote{In particular, we do 
   not use probabilistic methods where adding additional sample could change the shape of the type.}.
 
-\item The inference mechanism prefers types with properties (records). This is to allow extensible (open-world)
+\item The inference mechanism prefers class types with properties. This is to allow extensible (open-world)
   data formats, as we will explain. It also interacts well with developer tooling --
-  most editors provide code completion hints on ``.'' and so types with properties (records)
-  are easier to use than typessuch as discriminated unions that require pattern matching.
+  most editors provide code completion hints on ``.'' and so class types with properties
+  are easier to use than types such as discriminated unions that require pattern matching.
 
 \item Finally, the mechanism handles a number of practical concerns important in the real world. This includes 
   support for different numerical types, \kvd{null} values and missing data.
@@ -369,15 +369,14 @@ If OpenWeatherMap changes the response format, the sample in \S\ref{sec:introduc
 will not re-compile and the user knows that the code needs to be changed. What this means for
 type safety is discussed in \S\ref{sec:safety-discuss}.
 
-\paragraph{The role of records.}
+\paragraph{The role of optional properties.}
 The sample code is easy to write thanks to the fact that most F\# editors provide code completion
 when ``.'' is typed. The developer does not need to look at the sample JSON file to see what fields
-are available for a person. To support this scenario, our inference algorithm prefers records 
-(we also treat XML elements and CSV rows as records) and only infers types that require pattern 
-matching as the last resort.
+are available for a person. To support this scenario, our inference algorithm prefers types with properties
+and only infers discriminated union types that require pattern matching as the last resort.
 
 In the above example, this is demonstrated by the fact that \ident{Age} is marked as optional.
-An alternative is to provide two different record types (one with \ident{Name} and other with 
+An alternative is to provide a discriminated union for two different record types (one with \ident{Name} and other with 
 \ident{Name} and \ident{Age}), but this would complicate the processing code.
 
 % -------------------------------------------------------------------------------------------------
@@ -434,7 +433,7 @@ heading, paragraph and image. By its nature, XML is extensible and the sample ca
 possible nodes\footnote{Even when the document structure is defined using XML Schema, documents may 
 contain elements prefixed with other namespaces.}. 
 The type is not closed -- the data might be some other element about which nothing is known.
-This is the \emph{open-world assumption}. Supporting the open-world assumption is crucial when reading data from 
+This is the \emph{open-world assumption}. Supporting the open-world assumption is useful when reading data from 
 external data sources, because the sample document need only
 mention possibilities relevant to the application. 
 
@@ -446,7 +445,7 @@ that have additional optional fields and the type inference minimzes the number 
 variant-annotated top types that appear in the resulting type --
 a variant is not used if there is an alternative (Corollary~\ref{thm:no-unions}).
 
-In this case, the variant-annotated top type is ultimately presented as the following F\# type:
+In this case, the possibilities are ultimately presented as the following F\# class type:
 %
 \begin{equation*}
 \begin{array}{l}
@@ -458,15 +457,14 @@ In this case, the variant-annotated top type is ultimately presented as the foll
 \end{equation*}
 %
 This still provides access to the possible elements known statically from the sample.
-The access is, however, deliberately weak, because the user needs to explicitly handle the casse when the value is none 
-of the statically known elements. 
+However this  access is deliberately `weak', because the user needs to explicitly handle 
+the case when a value is not of a statically known element. 
 For example, the above code for  \strf{sample.doc} includes a \kvd{None -> ()} case to ensure that it will work 
 correctly on a document containing elements not listed in the sample. Furthermore, 
-the programmer is not \emph{forced} to consider each of the possiblities in the annotations. For example,
-the program is not forced to include cases for  \ident{Paragraph} and \ident{Image}.  
-Both of these weakenings are consistent with our design principles, 
-which prefer records (with optional properties) over discriminated unions, in order to support 
-open-world data and dot-driven developer tooling.
+the programmer is not forced to consider each of the possiblities in the annotations
+such as \ident{Paragraph} and \ident{Image}.  This is  consistent with our design principles, 
+which prefer optional properties over discriminated unions. The gain is that that the provided types support 
+both open-world data and dot-driven developer tooling.
 
 % Nothing forces the programmer to consider the cases
 
@@ -564,9 +562,7 @@ $\kvd{null}$ is inhabited by the $\kvd{null}$ value (using an overloaded notatio
 is the bottom type.
 
 A variant type \kvd{any} is annotated with the types it may represent in the sample document.
-As discussed earlier (\S\ref{sec:providers-xml}), variants force the user to handle the case when 
-a value is of a different type than the statically known ones and so variant types can be seen as a family of 
-top types. For the same reason, variants also implicitly permit the \kvd{null} value. 
+Variant-annotated top types can be seen as a family of top types and implicitly permit the \kvd{null} value. 
 
 % --------------------------------------------------------------------------------------------------
 
@@ -914,7 +910,7 @@ options may differ according to common practice in different programming communi
 \label{sec:inference-commonsuper}
 
 Given two structural types, the \emph{common supertype} relation finds a least upper bound
-(Theorem~\ref{thm:lub}). When possible, it avoids variant types and prefers records 
+(Theorem~\ref{thm:lub}). When possible, it avoids variant-annotated top types and prefers records 
 (Corollary~\ref{thm:no-unions}), which is important for usability as discussed earlier
 (\S\ref{sec:providers-json}). 
 
@@ -1445,7 +1441,7 @@ A collection type becomes an F\# $\ident{list}\langl\tau\rangl$. The returned ex
 values of an F\# type $\tau$. The handling of option type is similar; if the value is not \kvd{null},
 we wrap the recursively generated conversion expression $e'$ in the \ident{Some} constructor.
 
-As discussed earlier, variant types are also generated as F\# classes with properties. Given a variant
+As discussed earlier, variant-annotated top types are generated as F\# classes with properties. Given a variant
 $\kvd{any}\langl\sigma_1, \ldots, \sigma_n\rangl$, we get corresponding F\# types $\tau_i$ and generate 
 $n$ members of type $\ident{option}\langl \tau_i\rangl$. When the member is accessed, we need to perform
 a runtime type test using \ident{hasType} to ensure that the value has the right type (similarly to runtime 

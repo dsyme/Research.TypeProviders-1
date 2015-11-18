@@ -221,7 +221,7 @@ The key novel contributions are:
   adoption (\S\ref{sec:impl}). 
 
 \item We describe a predictable type inference algorithm for structured data formats, 
-  based on a \emph{common supertype} relation, that underlies the type providers 
+  based on a \emph{preferred typing} relation, that underlies the type providers 
   (\S\ref{sec:inference}).
 
 \item We give a formal model (\S\ref{sec:formal}) and use it to prove
@@ -494,19 +494,19 @@ types of JavaScript.}
 %
 % =================================================================================================
 
-\section{Structural type inference}
+\section{Inferring Types from Data}
 \label{sec:inference}
 
 Our type inference algorithm for structured formats is based on a subtyping relation. When 
 inferring the type, we infer the most specific types of individual values (CSV rows, JSON or XML 
-nodes) and recursively find a common supertype of all child nodes or all sample documents.
+nodes) and recursively find a preferred typing of all child nodes or all sample documents.
 
 We first define the type of structured data $\sigma$. Note that this type is distinct 
 from the programming language types $\tau$ (type providers generate the latter from the former). 
 Next, we define the subtyping relation on structural types $\sigma$ and describe the algorithm 
-for finding a common supertype. 
+for finding a preferred typing. 
 
-\subsection{Structural types}
+\subsection{Inferred Types}
 \label{sec:inference-types}
 
 We distinguish between \emph{non-nullable types} that always have a valid value (written as 
@@ -525,16 +525,17 @@ $\hat{\sigma}$) and \emph{nullable types} that encompass missing and \kvd{null} 
 
 \noindent
 Non-nullable types include records (consisting of an optional name and fields with their types) 
-and primitive types. Records arising from XML documents are named, while records used by 
+and primitives. Records arising from XML documents are named, while records used by 
 JSON and CSV providers are unnamed. 
 
-The three numerical types, \ident{int} for integers, \ident{decimal} for small precise decimal 
-numbers and \ident{float} for floating-point numbers, are related by sub-typing as discussed in 
+The three numerical primitives, \ident{int} for integers, \ident{decimal} for small precise decimal 
+numbers and \ident{float} for floating-point numbers, are related in a preference order as discussed in 
 \S\ref{sec:inference-subtyping}.
 
-Any non-nullable type can be wrapped in the \kvd{option} constructor to explicitly permit the 
-\kvd{null} value. Type providers map \kvd{option} to standard F\# option. A collection $[\sigma]$ 
-is also nullable and \kvd{null} values are treated as empty collections. The type 
+Any non-nullable type can be wrapped in the \kvd{nullable} constructor to explicitly permit the 
+\kvd{null} value. Later, type providers will map \kvd{nullable} to the standard F\# option type. A collection $[\sigma]$ 
+is also nullable: \kvd{null} are treated as empty collections, and missing fields of collection type
+evaluate to empty collections. The type 
 $\kvd{null}$ is inhabited by the $\kvd{null}$ value (using an overloaded notation) and $\bot$ 
 is the bottom type.
 
@@ -550,58 +551,58 @@ top types. For the same reason, variants also implicitly permit the \kvd{null} v
 \includegraphics[scale=0.80,trim=5mm 5mm 5mm 5mm,clip]{images/hierarchy.pdf} % left bottom right top
 \end{center}
 \vspace{-0.5em}
-\caption{Subtype relation between structural types}
+\caption{Preference relation between types inferred from data samples}
 \label{fig:subtyping-diagram}
 \vspace{-0.5em}
 \end{figure}
 
 % -------------------------------------------------------------------------------------------------
 
-\subsection{Subtyping relation}
+\subsection{Preference relation}
 \label{sec:inference-subtyping}
 
-Figure~\ref{fig:subtyping-diagram} provides a basic intuition about the subtyping between
-structural types. The upper part shows non-nullable types (with records and primitive types) and 
+Figure~\ref{fig:subtyping-diagram} provides a basic intuition about the relationship between
+possible types inferred from data samples. The upper part shows non-nullable types (with records and primitive types) and 
 the lower part shows nullable types with \kvd{null}, collections and optional values. We 
-abbreviate $\kvd{option}\langl\sigma\rangl$ as $\sigma?$ and we omit links between the two parts;
-any type $\hat{\sigma}$ is a subtype of $\kvd{option}\langl\hat{\sigma}\rangl$.
+abbreviate $\kvd{option}\langl\sigma\rangl$ as $\sigma?$ and the diagram omits links between the two parts;
+any type $\hat{\sigma}$ is preferred to $\kvd{option}\langl\hat{\sigma}\rangl$.
 
 \begin{definition}
-We write $\sigma_1 :> \sigma_2$ to denote that $\sigma_2$ is a subtype of $\sigma_1$. The 
-subtyping relation is defined as a transitive reflexive closure of the following rules:
+We write $\sigma_1 \leq \sigma_2$ to denote that type $\sigma_2$ is preferred over $\sigma_1$. The 
+relation is defined as a transitive reflexive closure of the following rules:
 
 \noindent
 \begin{align}
   \label{eq:sub-prim}\tag{P1}
-  \ident{float}\,:>\,\ident{decimal}\,&:>\,\ident{int}&\\[-0.2em]
+  \ident{float}\,\leq\,\ident{decimal}\,&\leq\,\ident{int}&\\[-0.2em]
   \label{eq:sub-null}\tag{P2}
-  \sigma &:> \kvd{null}  &(\textnormal{iff}~\sigma \neq \hat{\sigma})  \\[-0.2em]
+  \sigma &\leq \kvd{null}  &(\textnormal{iff}~\sigma \neq \hat{\sigma})  \\[-0.2em]
   \label{eq:sub-opt}\tag{P3}
-  \kvd{option}\langl\hat{\sigma}\rangl &:> \hat{\sigma}  &(\textnormal{for all}~\hat{\sigma})\\[-0.2em]
+  \kvd{option}\langl\hat{\sigma}\rangl &\leq \hat{\sigma}  &(\textnormal{for all}~\hat{\sigma})\\[-0.2em]
   \label{eq:sub-opt-cov}\tag{P4}
-  \kvd{option}\langl\hat{\sigma_1}\rangl &:> 
-    \kvd{option}\langl\hat{\sigma_2}\rangl  &(\textnormal{if}~\hat{\sigma_1} :> \hat{\sigma_2})\\[-0.2em]
+  \kvd{option}\langl\hat{\sigma_1}\rangl &\leq 
+    \kvd{option}\langl\hat{\sigma_2}\rangl  &(\textnormal{if}~\hat{\sigma_1} \leq \hat{\sigma_2})\\[-0.2em]
   \label{eq:sub-col}\tag{P5}
-  [\sigma_1] &:> [\sigma_2]  &(\textnormal{if}~\sigma_1 :> \sigma_2) \\[-0.2em]
+  [\sigma_1] &\leq [\sigma_2]  &(\textnormal{if}~\sigma_1 \leq \sigma_2) \\[-0.2em]
   \label{eq:sub-bot}\tag{P6}
-  \sigma &:> \bot  &(\textnormal{for all}~\sigma)\\[-0.2em]
+  \sigma &\leq \bot  &(\textnormal{for all}~\sigma)\\[-0.2em]
   \label{eq:sub-var-top}\tag{P7}
-  \kvd{any}\langl \sigma_1, \ldots, \sigma_n\rangl &:> \sigma 
+  \kvd{any}\langl \sigma_1, \ldots, \sigma_n\rangl &\leq \sigma 
 \end{align}
 
 \noindent
 \begin{align}
 \label{eq:sub-record1}\tag{R1}
 \begin{array}{l}
- \nu_?~\{ \nu_1\!:\!\sigma_1, .., \nu_n\!:\!\sigma_n \} :> \\
+ \nu_?~\{ \nu_1\!:\!\sigma_1, .., \nu_n\!:\!\sigma_n \} \leq \\
  \nu_?~\{ \nu_1\!:\!\sigma_1', .., \nu_n\!:\!\sigma_n' \}
-\end{array} \qquad ~~~~(\textnormal{if}~\sigma_i :> \sigma_i')
+\end{array} \qquad ~~~~(\textnormal{if}~\sigma_i \leq \sigma_i')
 \end{align}
 \vspace{-1em}
 \begin{align}
 \label{eq:sub-record2}\tag{R2}
 \begin{array}{l}
- \nu_?~\{ \nu_1\!:\!\sigma_1, .., \nu_n\!:\!\sigma_n \} :> \\
+ \nu_?~\{ \nu_1\!:\!\sigma_1, .., \nu_n\!:\!\sigma_n \} \leq \\
  \nu_?~\{ \nu_1\!:\!\sigma_1, .., .., \nu_m\!:\!\sigma_m \}
 \end{array} \qquad (\textnormal{when}~m \geq n)
 \end{align}
@@ -609,7 +610,7 @@ subtyping relation is defined as a transitive reflexive closure of the following
 \begin{align}
 \label{eq:sub-record3}\tag{R3}
 \begin{array}{l}
- \nu_?~\{ \nu_1\!:\!\sigma_1, .., \nu_n\!:\!\sigma_n \} :> \\
+ \nu_?~\{ \nu_1\!:\!\sigma_1, .., \nu_n\!:\!\sigma_n \} \leq \\
  \nu_?~\{ \nu_{\pi(1)}\!:\!\sigma_{\pi(1)}, .., \nu_{\pi(m)}\!:\!\sigma_{\pi(m)} \}
 \end{array} ~~(\pi~\textnormal{perm.})
 \end{align}
@@ -617,7 +618,7 @@ subtyping relation is defined as a transitive reflexive closure of the following
 \begin{align}
 \label{eq:sub-record4}\tag{R4}
 \begin{array}{l}
- \nu_?~\{ \nu_1\!:\!\sigma_1, .., \nu_n\!:\!\sigma_n, \nu_{n+1}\!:\!\kvd{null} \} :> \\
+ \nu_?~\{ \nu_1\!:\!\sigma_1, .., \nu_n\!:\!\sigma_n, \nu_{n+1}\!:\!\kvd{null} \} \leq \\
  \nu_?~\{ \nu_1\!:\!\sigma_1, .., \nu_n\!:\!\sigma_n \}
 \end{array}
 \end{align}
@@ -742,7 +743,7 @@ subtyping relation is defined as a transitive reflexive closure of the following
 \qquad
 % primitive types
 \inference[(prim)\;]
-  {\sigma_1 :> \sigma_2 &
+  {\sigma_1 \leq \sigma_2 &
    \tytagof(\sigma_1) = \tytagof(\sigma_2) = \ident{number} }
   {\sigma_1 \tsep \sigma_2 \vdash \sigma_1}\quad
 \end{equation*}
@@ -768,12 +769,12 @@ subtyping relation is defined as a transitive reflexive closure of the following
 \quad
 % null and nullable
  \begin{array}{l}
- \textnormal{\footnotesize{(null-1)}}\;\; \sigma \tsep \kvd{null} \vdash \sigma \quad(\sigma :> \kvd{null}) \\[0.6em]
+ \textnormal{\footnotesize{(null-1)}}\;\; \sigma \tsep \kvd{null} \vdash \sigma \quad(\sigma \leq \kvd{null}) \\[0.6em]
  \textnormal{\footnotesize{(null-2)}}\;\; \sigma \tsep \kvd{null} \vdash \sigma~\kvd{option} \quad(\sigma :\ngtr \kvd{null})
  \end{array}
 \end{equation*}
 
-\caption{Inference judgements that define the common supertype relation}
+\caption{Inference judgements that define the most preferred typing relation}
 \label{fig:subtyping-cst}
 \end{figure*}
 
@@ -786,9 +787,9 @@ Here is a summary of the key aspects of the definition:
   \ident{int} is a 32-bit integer, \ident{decimal} has a range of $-1^{29}$ to $1^{29}$ and 
   \ident{float} is a floating-point number (but imprecise).
 
-\item The \kvd{null} type is a subtype of all nullable types (\ref{eq:sub-null}), i.e. all 
+\item The \kvd{null} type preferred to all nullable types (\ref{eq:sub-null}), i.e. all 
   types excluding non-nullable types $\hat{\sigma}$. Any non-nullable type is a 
-  subtype of its optional version (\ref{eq:sub-opt}) and both options and collections are 
+  preferred to its nullable version (\ref{eq:sub-opt}) and both options and collections are 
   covariant (\ref{eq:sub-opt-cov}, \ref{eq:sub-col}).
 
 \item There is a bottom type (\ref{eq:sub-bot}) and variants behave as top types, because
@@ -810,8 +811,8 @@ the types forming a variant provide a valuable information about the sample docu
 A particularly important rule is (\ref{eq:sub-record4}), which allows subtype to have fewer record 
 elements. This allows us to prefer records over variants. For example, given 
 $\{ \ident{name}\!:\!\ident{string} \}$ and $\{ \ident{name}\!:\!\ident{string}, \ident{age}\!:\!\ident{int} \}$,
-we find a common supertype $\{ \ident{name}\!:\!\ident{string}, \ident{age}\!:\!\ident{int}~\kvd{option} \}$.
-This is a least upper bound (clarified below) and more usable than another common supertype 
+we find a preferred typing $\{ \ident{name}\!:\!\ident{string}, \ident{age}\!:\!\ident{int}~\kvd{option} \}$.
+This is a least upper bound (clarified below) and more usable than another preferred typing 
 $\kvd{var}\langl \{ \ident{name}\!:\!\ident{string} \}, \{ \ident{name}\!:\!\ident{string}, \ident{age}\!:\!\ident{int} \}\rangl$.
 
 Some of the aspects of our system (numeric types and handling of missing data) offer a range of
@@ -878,32 +879,32 @@ choices. For example, OCaml also has different numerical types and would likely 
 
 % -------------------------------------------------------------------------------------------------
 
-\subsection{Common supertype relation}
+\subsection{Most preferred typing relation}
 \label{sec:inference-commonsuper}
 
-Given two structural types, the \emph{common supertype} relation finds a least upper bound
+Given two typings, the \emph{most preferred typing} relation finds a greatest lower bound
 (Theorem~\ref{thm:lub}). When possible, it avoids variant types and prefers records 
 (Corollary~\ref{thm:no-unions}), which is important for usability as discussed earlier
 (\S\ref{sec:providers-json}). 
 
 \begin{definition}
-A \emph{common supertype} of types $\sigma_1$ and $\sigma_2$ is a type $\sigma$, written 
+A \emph{preferred typing} of $\sigma_1$ and $\sigma_2$ is a typing $\sigma$, written 
 $\sigma_1 \triangledown \sigma_2 \vdash \sigma$, obtained according to the inference rules in 
 Figure~\ref{fig:subtyping-cst}.
 \end{definition}
 
 \noindent
-When finding a common supertype of records (\emph{record-1}), we return a record that has the 
-union of their fields. The types of shared fields become common supertypes of their respective 
+When finding a preferred typing of records (\emph{record-1}), we return a record that has the 
+union of their fields. The types of shared fields become preferred typings of their respective 
 types while fields that are present in only one record are marked as optional. The (\emph{order-1})
 rule lets us reorder fields.
 
 Although all variants are mutual subtypes, we find one that best represents the sample. We avoid
 nested variants and limit the number of cases. This is done by grouping types 
-that have a common supertype which is not a variant. For example, rather than inferring 
+that have a preferred typing which is not a variant. For example, rather than inferring 
 $\kvd{any}\langl\ident{int}, \kvd{any}\langl\ident{bool}, \ident{decimal}\rangl\rangl$, 
-our algorithm finds the common supertype of $\ident{int}$ and $\ident{decimal}$ and produces 
-$\kvd{any}\langl\ident{decimal},\ident{bool}\rangl$. To identify types that have a common supertype 
+our algorithm finds the preferred typing of $\ident{int}$ and $\ident{decimal}$ and produces 
+$\kvd{any}\langl\ident{decimal},\ident{bool}\rangl$. To identify types that have a preferred typing 
 which is not a variant, we group the types by a tag. The tag of a type is obtained using a function 
 \tytagof{(-)}. The function is not defined on $\bot$ and $\kvd{null}$ as those are hanled by the 
 (\emph{bot}) and (\emph{null-1}) or (\emph{null-2}).
@@ -916,9 +917,9 @@ Finally, (\emph{var-3}) covers the case when we are combining two distinct non-v
 As variants implicitly permit \kvd{null} values, we use an auxiliary function $\dropopt{-}$ to
 make nullable types non-nullable (when possible) to simplify the type.
 
-The remaining rules are straightforward. For collections and options, we find the common supertype 
+The remaining rules are straightforward. For collections and options, we find the preferred typing 
 of the contained value(s); for compatible primitive types, we choose their supertype (\emph{prim})
-and a common supertype with \kvd{null} is either the type itself (\emph{null-1}) or an option 
+and a preferred typing with \kvd{null} is either the type itself (\emph{null-1}) or an option 
 (\emph{null-2}).
 
 \paragraph{Properties.}
@@ -929,7 +930,7 @@ supertype relation is well-defined (Theorem~\ref{thm:func}) and finds the least 
 
 \begin{definition}
 Types $\sigma_1$, $\sigma_2$ are \emph{equivalent}, written $\sigma_1 \equiv \sigma_2$ iff
-they are mutual subtypes, i.e. $\sigma_1 <: \sigma_2 \wedge \sigma_1 :> \sigma_2$.
+they are mutual subtypes, i.e. $\sigma_1 <: \sigma_2 \wedge \sigma_1 \leq \sigma_2$.
 An equivalence class of a type $\sigma$ is $\mathcal{E}(\sigma) = \{ \sigma' \;|\; \sigma\equiv\sigma' \}$.
 \end{definition}
 
@@ -945,7 +946,7 @@ lists containing variant values).
 For all $\sigma_1$ and $\sigma_2$ there exists exactly one $\sigma$ such that 
 $\sigma_1 \triangledown \sigma_2 \vdash \sigma$.
 Furthermore, if $\sigma_1 \triangledown \sigma_2 \vdash \sigma'$
-then it holds that $\sigma :> \sigma'$ and $\sigma' :> \sigma$.
+then it holds that $\sigma \leq \sigma'$ and $\sigma' \leq \sigma$.
 \end{theorem}
 \begin{proof}
 The pre-conditions of rules in Figure~\ref{fig:subtyping-cst} are disjoint, with the exception 
@@ -957,19 +958,19 @@ of each other and this property is preserved by rules that use $\triangledown$ r
 \label{thm:lub}
 \raggedright
 If $\sigma_1 \triangledown \sigma_2 \vdash \sigma$ then $\sigma$ is a least upper bound, i.e. 
-$\sigma :> \sigma_1$ and $\sigma :> \sigma_2$ and for all $\sigma'$ such that $\sigma' :> \sigma_1$
-and $\sigma' :> \sigma_2$, it holds that $\sigma' :> \sigma$.
+$\sigma \leq \sigma_1$ and $\sigma \leq \sigma_2$ and for all $\sigma'$ such that $\sigma' \leq \sigma_1$
+and $\sigma' \leq \sigma_2$, it holds that $\sigma' \leq \sigma$.
 \end{theorem}
 \begin{proof}
 By induction over $\vdash$. Note that the algorithm never produces nested variant or nested
-option. When one type is variant, the only common supertype is also a variant (\emph{var-2}); 
-for (\emph{var-3}) no other common supertype exists because the two types have distinct 
+option. When one type is variant, the only preferred typing is also a variant (\emph{var-2}); 
+for (\emph{var-3}) no other preferred typing exists because the two types have distinct 
 tags and are not options.
 \end{proof}
 
 \begin{corollary}
 \label{thm:no-unions}
-Given $\sigma_1, \sigma_2, \sigma$ such that $\sigma :> \sigma_1$ and $\sigma :> \sigma_2$ and 
+Given $\sigma_1, \sigma_2, \sigma$ such that $\sigma \leq \sigma_1$ and $\sigma \leq \sigma_2$ and 
 $\sigma$ is not a variant, then $\sigma_1 \tsep \sigma_2 \vdash \sigma'$ 
 and $\sigma' \equiv \sigma$.
 \end{corollary}
@@ -977,6 +978,44 @@ and $\sigma' \equiv \sigma$.
 Consequence of Theorem~\ref{thm:lub} and the fact that the set of all variants is the
 top element of $\mathcal{E}$.
 \end{proof}
+
+\subsection{Inferring types from values}
+\label{sec:formal-inferval}
+
+The preferred typing algorithm (\S\ref{sec:inference}) is at the core of the type inference 
+for structural values, but we have not yet clarified how it is used. Given a JSON, XML or CSV 
+document, F\# Data constructs a structural value $s$ from the sample. The following defines a mapping 
+$\semalt{s_1,\ldots,s_n}$ which turns a collection of sample values $s_1, \ldots, s_n$ into a 
+structural type $\sigma$:
+%
+\begin{equation*}
+\begin{array}{rclcrclcrcl}
+ \semalt{i} &\narrow{=}& \ident{int} && \semalt{d} &\narrow{=}& \ident{decimal} && \semalt{b} &\narrow{=}& \ident{bool}\\
+ \semalt{f} &\narrow{=}& \ident{float} && \semalt{t} &\narrow{=}& \ident{string} && \semalt{\kvd{null}}  &\narrow{=}& \kvd{null}\\
+\end{array}
+\end{equation*}
+\noindent
+\vspace{-0.5em}
+\begin{equation*}
+\begin{array}{l}
+ \semalt{s_1, \ldots, s_n} = \sigma_n \quad\textnormal{where}\\[0.1em]
+ \qquad\sigma_0 = \bot,~ \forall i\in \{ 1.. n \}.~ \sigma_{i-1} \triangledown \semalt{s_i} \vdash \sigma_i
+ \\[0.5em]
+ \semalt{[s_1; \ldots; s_n]} = [\semalt{s_1, \ldots, s_n}]
+ \\[0.5em]
+ \semalt{\nu?~\{ \nu_1 \mapsto s_1, \ldots, \nu_n \mapsto s_n \}} =\\[0.1em]
+ \qquad\nu?~\{ \nu_1:\semalt{s_1}, \ldots, \nu_n :\semalt{s_n} \}
+\end{array}
+\end{equation*}
+%
+We overload the notation and write $\semalt{s}$ when inferring type from a single value. Primitive 
+values are mapped to their corresponding types. For records, we return a type with field types 
+inferred based on individual values. 
+
+When infering a value from multiple samples, we use the preferred typing relation to find a common 
+type for all values (starting with $\bot$). This operation is used at the top-level (when calling 
+a type provider with multiple samples) and also when inferring the type of a collection.
+
 
 
 
@@ -1130,7 +1169,7 @@ of ML, we only pick constructs for working with options and lists that we need l
 \begin{equation*}
 \begin{array}{rcl}
  \tau &\narrow{=}& \ident{int} \lsep \ident{decimal} \lsep \ident{float} \lsep \ident{bool} \lsep \ident{string} \\[0.0em]
-      &\narrow{|}& C \lsep \ident{StructVal} \lsep \ident{list}\langl\tau\rangl \lsep \ident{option}\langl\tau\rangl \\[0.6em]
+      &\narrow{|}& C \lsep \ident{Data} \lsep \ident{list}\langl\tau\rangl \lsep \ident{option}\langl\tau\rangl \\[0.6em]
  L &\narrow{=}& \kvd{type}~C(\overline{x:\tau}) = \overline{M} \\[0.0em]
  M &\narrow{=}& \kvd{member}~N:\tau=e \\[0.6em]
  v &\narrow{=}& s \lsep \ident{None} \lsep \ident{Some}(v) \lsep \kvd{new}~C(\overline{v}) \lsep [v_1; \ldots; v_n] \\[0.0em]
@@ -1142,7 +1181,7 @@ of ML, we only pick constructs for working with options and lists that we need l
 \end{equation*}
 
 \noindent
-The type \ident{StructVal} is a type of all structural values $s$. A class
+The type \ident{Data} is a type of all structural values $s$. A class
 definition $L$ consists of a constructor and zero or more members. Values $v$ include 
 previously defined structural values $s$ and values for the option and list type; finally 
 expressions $e$ include previously defined operations $op$, class construction, member access, 
@@ -1189,8 +1228,8 @@ argument passed to conditional, pattern matching or one of the primitives from F
 \noindent  
 \begin{equation*}
 \inference
-  {L; \Gamma \vdash e_1 : \ident{StructVal}}
-  {L; \Gamma \vdash [e_1; \ldots; e_n]:\ident{StructVal}}
+  {L; \Gamma \vdash e_1 : \ident{Data}}
+  {L; \Gamma \vdash [e_1; \ldots; e_n]:\ident{Data}}
 \quad  
 \inference
   {~}
@@ -1203,7 +1242,7 @@ argument passed to conditional, pattern matching or one of the primitives from F
 \quad
 \inference
   {~}
-  {L; \Gamma \vdash s : \ident{StructVal}}
+  {L; \Gamma \vdash s : \ident{Data}}
 \end{equation*}
 \vspace{0.5em}
 \begin{equation*}
@@ -1230,14 +1269,14 @@ $L; \Gamma \vdash e : \tau$ where the context also contains a set of class decla
 The fragment demonstrates the key differences from Standard ML and Featherweight Java:
 %
 \begin{itemize}
-\item[--] All structural values $s$ have the type \ident{StructVal}, but some have other types
+\item[--] All structural values $s$ have the type \ident{Data}, but some have other types
   (Booleans, strings, integers, etc.) as illustrated by the rule for $n$.
-  For other values, \ident{StructVal} is the only type -- this includes records and \kvd{null}.
-\item[--] A list containing other structural values $[s_1; \ldots; s_n]$ has a type \ident{StructVal},
+  For other values, \ident{Data} is the only type -- this includes records and \kvd{null}.
+\item[--] A list containing other structural values $[s_1; \ldots; s_n]$ has a type \ident{Data},
   but can also have the $\ident{list}\langl\tau\rangl$ type. Conversely, lists that contain
-  non-structural values like objects or options are not of type \ident{StructVal}.
+  non-structural values like objects or options are not of type \ident{Data}.
 \item[--] Operations $op$ (omitted) are treated as functions, accepting 
-  \ident{StructVal} and producing an appropriate result type.
+  \ident{Data} and producing an appropriate result type.
 \item[--] Rules for checking class construction and member access are similar to corresponding
   rules of Featherweight Java.  
 \end{itemize}
@@ -1285,7 +1324,7 @@ and those are well-typed by construction.
  \sem{\,\nu_? \{ \nu_1 : \sigma_1, \ldots, \nu_n : \sigma_n \}\,}_e = \\[0.1em]
  \quad C, \kvd{new}~C(e), L_1\cup\ldots\cup L_n\cup\{ L \}\quad\textnormal{where}\\[0.6em]
  \qquad \;\;C~\textnormal{is a fresh class name} \\[0.1em]
- \qquad \;\,\,L = \kvd{type}~C(v:\ident{StructVal})~=~M_1\ldots M_n  \\[0.1em]
+ \qquad \;\,\,L = \kvd{type}~C(v:\ident{Data})~=~M_1\ldots M_n  \\[0.1em]
  \qquad M_i = \kvd{member}~\nu_i:\tau_i=e_i\\[0.1em]
  \qquad \tau_i, e_i, L_i = \sem{\sigma_i}_{e'},\;\; e'=\ident{getField}(\nu_?, \nu_i, e)\\[0.6em]
 \end{array}
@@ -1303,7 +1342,7 @@ and those are well-typed by construction.
 % Anything else
 \begin{equation*}
 \begin{array}{l}
- \sem{\bot}_e = \sem{\kvd{null}}_e = \ident{StructVal}, e, \emptyset
+ \sem{\bot}_e = \sem{\kvd{null}}_e = \ident{Data}, e, \emptyset
 \end{array}
 \end{equation*}
 
@@ -1323,7 +1362,7 @@ and those are well-typed by construction.
  \sem{\,\kvd{any}\langl\sigma_1, \ldots, \sigma_n\rangl\,}_e = \\[0.1em]
  \quad C, \kvd{new}~C(e), L_1\cup\ldots\cup L_n\cup\{ L \}\;\;\textnormal{where}\\[0.6em]
  \qquad \;\;C~\textnormal{is a fresh class name} \\[0.1em]
- \qquad \;\,\,L = \kvd{type}~C(v:\ident{StructVal})~=~M_1\ldots M_n \\[0.1em]
+ \qquad \;\,\,L = \kvd{type}~C(v:\ident{Data})~=~M_1\ldots M_n \\[0.1em]
  \qquad M_i = \kvd{member}~\nu_i:\ident{option}\langl\tau_i\rangl=\\[0.1em]
  \hspace{5.8em}  \kvd{if}~\ident{hasType}(\sigma_i, v)~\kvd{then}~
      \ident{Some}(e_i)~\kvd{else}~\ident{None} \\[0.1em]
@@ -1357,7 +1396,7 @@ or more sample documents (\S\ref{sec:inference}) and we defined a simplified mod
 of F\# (\S\ref{sec:formal-ff}) and F\# Data runtime (\S\ref{sec:formal-tp}). In this section, we 
 define how the type providers work, linking the two parts.
 
-All F\# Data type providers take (one or more) sample documents, infer a common supertype $\sigma$
+All F\# Data type providers take (one or more) sample documents, infer a preferred typing $\sigma$
 and then use it to generate F\# types that are exposed to the programmer.\footnote{The actual 
 implementation provides \emph{erased types} as described in \cite{fsharp-typeprov}. Here, we treat 
 the code as actually generated. This is an acceptable simplification, because F\# Data type providers 
@@ -1365,7 +1404,7 @@ do not rely on laziness that is available through erased types.}
 
 \paragraph{Type provider mapping.}
 A type provider produces an F\# type $\tau$ together with an expression that wraps an input
-value (of type \ident{StructVal}) as a value of type $\tau$ and a collection of class definitions. 
+value (of type \ident{Data}) as a value of type $\tau$ and a collection of class definitions. 
 We express it using the following mapping:
 %
 \begin{equation*}
@@ -1414,7 +1453,7 @@ The rules from Figure~\ref{fig:tp-generation} produce the following class:
 %
 \begin{equation*}
 \begin{array}{l}
- \kvd{type}~\ident{Person}(\ident{v}:\ident{StructVal})~= \\[0.1em]
+ \kvd{type}~\ident{Person}(\ident{v}:\ident{Data})~= \\[0.1em]
  \quad \kvd{member}~\ident{Age}~:~\ident{option}\langl\ident{int}\rangl~= \\[0.1em]
  \qquad \kvd{if}~\ident{isNull}~(\ident{getField}(\ident{Person},\ident{Age}, \ident{v}))~\kvd{then}~\ident{None} \\[0.1em]
  \qquad \kvd{else}~\ident{Some}(\ident{asInt}(\ident{getField}(\ident{Person},\ident{Age}, \ident{v}))) \\[0.1em]
@@ -1437,7 +1476,7 @@ of \ident{Person} and string values:
 %
 \begin{equation*}
 \begin{array}{l}
- \kvd{type}~\ident{PersonOrString}(v:\ident{StructVal})~= \\[0.1em]
+ \kvd{type}~\ident{PersonOrString}(v:\ident{Data})~= \\[0.1em]
  \quad \kvd{member}~\ident{Person}~:~\ident{option}\langl\ident{Person}\rangl~= \\[0.1em]
  \qquad \kvd{if}~\ident{hasType}(\{\ident{Age}\!:\!\kvd{option}\langl\ident{int}\rangl, \ident{Name}\!:\!\ident{string}\}, v)~\\[0.1em]
  \qquad\quad \kvd{then}~\ident{Some}(\kvd{new}~\ident{Person}(v))~\kvd{else}~\ident{None} \\[0.1em]
@@ -1460,44 +1499,6 @@ by returning \kvd{false}. As discussed earlier, variants provide easy access to 
 (\ident{string} or \ident{Person}), but they are robust with respect to unexpected inputs.
 
 % --------------------------------------------------------------------------------------------------
-
-\subsection{Inferring types from values}
-\label{sec:formal-inferval}
-
-The common supertype algorithm (\S\ref{sec:inference}) is at the core of the type inference 
-for structural values, but we have not yet clarified how it is used. Given a JSON, XML or CSV 
-document, F\# Data constructs a structural value $s$ from the sample. The following defines a mapping 
-$\semalt{s_1,\ldots,s_n}$ which turns a collection of sample values $s_1, \ldots, s_n$ into a 
-structural type $\sigma$:
-%
-\begin{equation*}
-\begin{array}{rclcrclcrcl}
- \semalt{i} &\narrow{=}& \ident{int} && \semalt{d} &\narrow{=}& \ident{decimal} && \semalt{b} &\narrow{=}& \ident{bool}\\
- \semalt{f} &\narrow{=}& \ident{float} && \semalt{t} &\narrow{=}& \ident{string} && \semalt{\kvd{null}}  &\narrow{=}& \kvd{null}\\
-\end{array}
-\end{equation*}
-\noindent
-\vspace{-0.5em}
-\begin{equation*}
-\begin{array}{l}
- \semalt{s_1, \ldots, s_n} = \sigma_n \quad\textnormal{where}\\[0.1em]
- \qquad\sigma_0 = \bot,~ \forall i\in \{ 1.. n \}.~ \sigma_{i-1} \triangledown \semalt{s_i} \vdash \sigma_i
- \\[0.5em]
- \semalt{[s_1; \ldots; s_n]} = [\semalt{s_1, \ldots, s_n}]
- \\[0.5em]
- \semalt{\nu?~\{ \nu_1 \mapsto s_1, \ldots, \nu_n \mapsto s_n \}} =\\[0.1em]
- \qquad\nu?~\{ \nu_1:\semalt{s_1}, \ldots, \nu_n :\semalt{s_n} \}
-\end{array}
-\end{equation*}
-%
-We overload the notation and write $\semalt{s}$ when inferring type from a single value. Primitive 
-values are mapped to their corresponding types. For records, we return a type with field types 
-inferred based on individual values. 
-
-When infering a value from multiple samples, we use the common supertype relation to find a common 
-type for all values (starting with $\bot$). This operation is used at the top-level (when calling 
-a type provider with multiple samples) and also when inferring the type of a collection.
-
 
 
 % ==================================================================================================
@@ -1539,7 +1540,7 @@ all its members can also be reduced to values.
 
 \begin{lemma}[Correctness of provided types]
 \label{thm:tp-correctness}
-Given a sample value $s$ and an input value $s'$ such that $\semalt{s} :> \semalt{s'}$
+Given a sample value $s$ and an input value $s'$ such that $\semalt{s} \succ s'$
 and provided type, expression and class declarations $\tau, e, L = \sem{\semalt{s}}_{s'}$, 
 then $e \reduce^{*} v$ and if $\tau$ is a class ($\tau=C$) then for all members $N_i$ of the 
 class $C$, it holds that $e.N_i \reduce^{*} v$.
@@ -1564,7 +1565,7 @@ Assume $s_1, \ldots, s_n$ are samples, $\sigma=\semalt{s_1, \ldots, s_n}$ is an 
 type and $\tau,e,L = \sem{\sigma}_x$ are a type, expression and class definitions generated by a 
 type provider.
 
-For all new inputs $s'$ such that $\exists i.(\semalt{s_i} :> \semalt{s'})$, let $e_s=e[x\leftarrow s']$
+For all new inputs $s'$ such that $\exists i.(\semalt{s_i} \leq \semalt{s'})$, let $e_s=e[x\leftarrow s']$
 be an expression (of type $\tau$) that wraps the input in a provided type. Then, for any expression $e_c$
 (user code) such that $\emptyset; y:\tau \vdash e_c:\tau'$ and $e_c$ does not contain primitive operations
 $op$ as a sub-expression, it is the case that $e_c[y\leftarrow e_s] \reduce^{*} v$ for some value $v$ and
@@ -1591,7 +1592,7 @@ in Figure~\ref{fig:tp-generation} is well-typed.
 The progress lemma states that evaluation of a well-typed program does not reach an undefined state. 
 This is not a problem for the (standard) ML subset and object-oriented subset of the calculus. The 
 problematic part are the primitive functions (Figure~\ref{fig:op-conversions}). Given a structural 
-value (of type \ident{StructVal}), the reduction can get stuck if the value does not have a structure 
+value (of type \ident{Data}), the reduction can get stuck if the value does not have a structure 
 required by a specific primitive.
 
 The Lemma~\ref{thm:tp-correctness} guarantees that this does not happen inside the provided type.
@@ -1742,7 +1743,7 @@ collections store multiple possible element types together with their \emph{  in
 \end{array}
 \end{equation*}
 %
-We omit the details, but finding a common supertype of two heterogeneous 
+We omit the details, but finding a preferred typing of two heterogeneous 
 collections is analogous to the handling of variants. We merge cases with the same tag (by finding 
 their common super-type) and calculate their new shared multiplicity (for example, by turning 
 $1$ and $1?$ into $1?$).
@@ -1804,7 +1805,7 @@ challenging.
 
 We explored the F\# Data type providers for XML, CSV and JSON. As most real-world data do not come 
 with an explicit schema, the library uses \emph{type inference} that deduces a type from a set of 
-samples. Our type inference algorithm is based on a common supertype relation. For usability 
+samples. Our type inference algorithm is based on a preferred typing relation. For usability 
 reasons, it prefers records and avoids variant types. The algorithm is predictable, which is 
 important as developers need to understand how changing the samples affects the resulting types.
 
